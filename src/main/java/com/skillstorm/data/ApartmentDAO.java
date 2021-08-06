@@ -4,67 +4,107 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.LinkedList;
 import java.util.List;
 
 import com.skillstorm.beans.Apartment;
 
-public class ApartmentDAO implements ApartmentDAOInterface, AutoCloseable{
+public class ApartmentDAO{
 	
-	private Connection connection;
+	private String url = "jdbc:mysql://localhost:3306/apartments";
+	private String user = "root";
+	private String password = "root";
 	
-	public ApartmentDAO() throws Exception {
-		connect();
-	}
+	private String tableName = "apartment";
+	
+	static {
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver");
+        } catch (ClassNotFoundException e) {
+            System.out.println("Driver error");
+            e.printStackTrace();
+        }
+    }
+	
+	public ApartmentDAO(){
 
-	@Override
-	public void close() throws Exception {
-		if(connection != null && !connection.isClosed()) {
-			this.connection.close();
+	}
+	
+	public ApartmentDAO(String tableName) {
+		this.tableName = tableName;
+	}
+	
+
+	public Apartment save(Apartment apartment) {
+		try(Connection conn = DriverManager.getConnection(url, user, password)) {
+			String sql = "INSERT INTO "+tableName+"(NAME, ADDRESS, PRICE) VALUES(?, ?, ?)";
+			PreparedStatement statement = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
+			statement.setString(1, apartment.getName());
+			statement.setString(2, apartment.getAddress());
+			statement.setInt(3, apartment.getPrice());
+			int rows = statement.executeUpdate();
+			ResultSet keys = statement.getGeneratedKeys();
+			keys.next();
+			int id = keys.getInt(1);
+			apartment.setId(id);
+			return apartment;
+		} catch (Exception e) {
+			System.out.println("Insertion failed");
+            e.printStackTrace();
 		}
-	}
-	
-	public void connect() throws Exception {
-		String url = "jdbc:mysql://localhost:3306/apartments";
-		String user = "root";
-		String password = "root";
-		
-		Class.forName("com.mysql.cj.jdbc.Driver").newInstance();
-		this.connection = DriverManager.getConnection(url, user, password);
+		return null;
 	}
 
-	@Override
-	public boolean save(Apartment apartment) throws SQLException {
-		String sql = "INSERT INTO HOME(NAME, ADDRESS, VALUE) VALUES(?, ?, ?)";
-		PreparedStatement statement = connection.prepareStatement(sql);
-		statement.setString(1, apartment.getName());
-		statement.setString(2, apartment.getAddress());
-		statement.setInt(3, apartment.getPrice());
-		int rows = statement.executeUpdate();
-		return rows > 0 ? true: false;
-	}
-
-	@Override
-	public List<Apartment> findAll() throws SQLException {
-		String sql = "SELECT APARTMENT_ID, NAME, ADDRESS, PRICE FROM HOME";
+	public List<Apartment> findAll() {
 		List<Apartment> results = new LinkedList<>();
-		PreparedStatement stmt = connection.prepareStatement(sql);
-		ResultSet rs = stmt.executeQuery();
-		while(rs.next()) {
-			Apartment apm = new Apartment(rs.getString("NAME"), rs.getString("ADDRESS"), rs.getInt("PRICE"));
-			apm.setId(rs.getInt("HOME_ID"));
-			results.add(apm);
+		try(Connection conn = DriverManager.getConnection(url, user, password)) {
+			String sql = "SELECT APARTMENT_ID, NAME, ADDRESS, PRICE FROM " + tableName;
+
+			PreparedStatement stmt = conn.prepareStatement(sql);
+			ResultSet rs = stmt.executeQuery();
+			while(rs.next()) {
+				Apartment apm = new Apartment(rs.getString("NAME"), rs.getString("ADDRESS"), rs.getInt("PRICE"));
+				apm.setId(rs.getInt("APARTMENT_ID"));
+				results.add(apm);
+			}
+		} catch (Exception e) {
+			System.out.println("Find all failed");
+            e.printStackTrace();
 		}
 		return results;
 	}
 	
+	public boolean update(Apartment apartment) {
+		try(Connection conn = DriverManager.getConnection(url, user, password)) {
+			String sql = "update " +tableName+ " set NAME = ?, ADDRESS = ?, PRICE = ? where APARTMENT_ID = ?";
+			PreparedStatement statement = conn.prepareStatement(sql);
+			statement.setString(1, apartment.getName());
+			statement.setString(2, apartment.getAddress());
+			statement.setInt(3, apartment.getPrice());
+			statement.setInt(4, apartment.getId());
+			int rows = statement.executeUpdate();
+			return rows > 0 ? true: false;
+		} catch (Exception e) {
+			System.out.println("Update failed");
+            e.printStackTrace();
+		}
+		return false;
+	}
+	
+	public boolean delete(int id) {
+		try(Connection conn = DriverManager.getConnection(url, user, password)) {
+			String sql = "delete from "+tableName+" where APARTMENT_ID = ?";
+			PreparedStatement statement = conn.prepareStatement(sql);
+			statement.setInt(1, id);
+			int rows = statement.executeUpdate();
+			return rows > 0 ? true: false;
+		} catch (Exception e) {
+			System.out.println("Deletion failed");
+            e.printStackTrace();
+		}
+		return false;
+	}
+	
 }
 
-interface ApartmentDAOInterface {
-	// create
-	public boolean save(Apartment apartment) throws SQLException;
-	
-	// get
-	public List<Apartment> findAll() throws SQLException;
-}
